@@ -25,9 +25,10 @@ func main() {
 	serverMux.Handle("/app/", apiConfig.middlewareMetricsInc(http.StripPrefix("/app/", http.FileServer(http.Dir(filePathRootString)))))
 
 	serverMux.HandleFunc("GET /api/healthz", handlerHealthz)
-
 	serverMux.HandleFunc("GET /admin/metrics", apiConfig.handlerMetrics)
 	serverMux.HandleFunc("POST /admin/reset", apiConfig.handlerReset)
+
+	serverMux.HandleFunc("POST /api/validate_chirp", handlerValidateChirps)
 
 	server := &http.Server{
 		Addr:    portString,
