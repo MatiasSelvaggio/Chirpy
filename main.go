@@ -1,24 +1,33 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"sync/atomic"
 
+	"github.com/MatiasSelvaggio/Chirpy/internal/database"
 	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
 )
 
 type apiConfig struct {
 	fileserverHits atomic.Int32
+	dbQueries      *database.Queries
 }
 
 func main() {
 
 	godotenv.Load(".env")
 
-	portString, filePathRootString, apiConfig := startApp()
+	portString, filePathRootString, dbURL, apiConfig := startApp()
+	db, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		log.Fatal(err)
+	}
+	apiConfig.dbQueries = database.New(db)
 
 	serverMux := http.NewServeMux()
 
@@ -39,7 +48,7 @@ func main() {
 	log.Fatal(server.ListenAndServe())
 }
 
-func startApp() (string, string, apiConfig) {
+func startApp() (string, string, string, apiConfig) {
 	portString := os.Getenv("PORT")
 	if portString == "" {
 		log.Fatal("PORT is not found in the environment")
@@ -48,7 +57,11 @@ func startApp() (string, string, apiConfig) {
 	if portString == "" {
 		log.Fatal("FILE_PATH_ROOT is not found in the environment")
 	}
-	return portString, filePathRootString, apiConfig{
+	dbURL := os.Getenv("DB_URL")
+	if portString == "" {
+		log.Fatal("DB_URL is not found in the environment")
+	}
+	return portString, filePathRootString, dbURL, apiConfig{
 		fileserverHits: atomic.Int32{},
 	}
 }
