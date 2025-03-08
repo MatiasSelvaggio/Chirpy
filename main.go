@@ -15,29 +15,33 @@ import (
 
 type apiConfig struct {
 	fileserverHits atomic.Int32
-	dbQueries      *database.Queries
+	db             *database.Queries
+	platform       string
 }
 
 func main() {
 
 	godotenv.Load(".env")
 
-	portString, filePathRootString, dbURL, apiConfig := startApp()
+	portString, filePathRootString, dbURL, cfg := startApp()
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		log.Fatal(err)
 	}
-	apiConfig.dbQueries = database.New(db)
+	cfg.db = database.New(db)
 
 	serverMux := http.NewServeMux()
 
-	serverMux.Handle("/app/", apiConfig.middlewareMetricsInc(http.StripPrefix("/app/", http.FileServer(http.Dir(filePathRootString)))))
+	serverMux.Handle("/app/", cfg.middlewareMetricsInc(http.StripPrefix("/app/", http.FileServer(http.Dir(filePathRootString)))))
 
 	serverMux.HandleFunc("GET /api/healthz", handlerHealthz)
-	serverMux.HandleFunc("GET /admin/metrics", apiConfig.handlerMetrics)
-	serverMux.HandleFunc("POST /admin/reset", apiConfig.handlerReset)
+	serverMux.HandleFunc("GET /admin/metrics", cfg.handlerMetrics)
+	serverMux.HandleFunc("POST /admin/reset", cfg.handlerReset)
 
 	serverMux.HandleFunc("POST /api/validate_chirp", handlerValidateChirps)
+	serverMux.HandleFunc("POST /api/chirps", cfg.handlerCreateChirps)
+
+	serverMux.HandleFunc("POST /api/users", cfg.handleCreationUser)
 
 	server := &http.Server{
 		Addr:    portString,
@@ -54,15 +58,20 @@ func startApp() (string, string, string, apiConfig) {
 		log.Fatal("PORT is not found in the environment")
 	}
 	filePathRootString := os.Getenv("FILE_PATH_ROOT")
-	if portString == "" {
+	if filePathRootString == "" {
 		log.Fatal("FILE_PATH_ROOT is not found in the environment")
 	}
 	dbURL := os.Getenv("DB_URL")
-	if portString == "" {
+	if dbURL == "" {
 		log.Fatal("DB_URL is not found in the environment")
+	}
+	platform := os.Getenv("PLATFORM")
+	if platform == "" {
+		platform = "dev"
 	}
 	return portString, filePathRootString, dbURL, apiConfig{
 		fileserverHits: atomic.Int32{},
+		platform:       platform,
 	}
 }
 
