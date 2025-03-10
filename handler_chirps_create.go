@@ -2,10 +2,12 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/MatiasSelvaggio/Chirpy/internal/auth"
 	"github.com/MatiasSelvaggio/Chirpy/internal/database"
 	"github.com/google/uuid"
 )
@@ -69,33 +71,39 @@ func theProfaner(text string, badWords map[string]struct{}) string {
 
 func (cfg *apiConfig) handlerChirpsCreate(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
-		Body   string    `json:"body"`
-		UserId uuid.UUID `json:"user_id"`
+		Body string `json:"body"`
 	}
 	type returnVals struct {
 		Chirps
 	}
 
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		responseWithError(w, http.StatusUnauthorized, "Fail getting token from header", err)
+		return
+	}
+
+	userID, err := auth.ValidateJWT(token, cfg.secretJWT)
+	if err != nil {
+		responseWithError(w, http.StatusUnauthorized, "invalid jwt", err)
+		return
+	}
+
 	decoder := json.NewDecoder(r.Body)
 	params := parameters{}
-	err := decoder.Decode(&params)
+	err = decoder.Decode(&params)
 	if err != nil {
 		responseWithError(w, http.StatusInternalServerError, "Error decoding", err)
 		return
 	}
 
-	body := strings.TrimSpace(params.Body)
-	if len(body) > 140 || body == "" {
-		responseWithError(w, http.StatusBadRequest, "you must send body and not be Chirp is too long", nil)
-		return
-	}
-	userId := params.UserId
-	if (userId == uuid.UUID{}) {
-		responseWithError(w, http.StatusBadRequest, "you must send user_id", nil)
+	cleaned, err := validateChirp(params.Body)
+	if err != nil {
+		responseWithError(w, http.StatusBadRequest, err.Error(), err)
 		return
 	}
 
-	chirp, err := cfg.db.CreateChirp(r.Context(), database.CreateChirpParams{Body: body, UserID: userId})
+	chirp, err := cfg.db.CreateChirp(r.Context(), database.CreateChirpParams{Body: cleaned, UserID: userID})
 	if err != nil {
 		responseWithError(w, http.StatusInternalServerError, "something went wrong", err)
 		return
@@ -112,54 +120,17 @@ func (cfg *apiConfig) handlerChirpsCreate(w http.ResponseWriter, r *http.Request
 	})
 }
 
-func (cfg *apiConfig) handlerChirpsRetrieve(w http.ResponseWriter, r *http.Request) {
-	chirps, err := cfg.db.GetChirps(r.Context())
-	if err != nil {
-		responseWithError(w, http.StatusInternalServerError, "something went wrong", err)
-		return
-	}
-	out := []Chirps{}
-	for _, chirp := range chirps {
-		out = append(out, Chirps{
-			Id:        chirp.ID,
-			CreatedAt: chirp.CreatedAt,
-			UpdatedAt: chirp.UpdatedAt,
-			Body:      chirp.Body,
-			UserId:    chirp.UserID,
-		})
+func validateChirp(body string) (string, error) {
+	const maxChirpLength = 140
+	if len(body) > maxChirpLength {
+		return "", errors.New("chirp is too long")
 	}
 
-	responseWithJson(w, http.StatusOK, out)
-}
-
-func (cfg *apiConfig) handlerChirpsGet(w http.ResponseWriter, r *http.Request) {
-	type returnVals struct {
-		Chirps
+	badWords := map[string]struct{}{
+		"kerfuffle": {},
+		"sharbert":  {},
+		"fornax":    {},
 	}
-	chirpIDString := r.PathValue("chirpID")
-	chirpID, err := uuid.Parse(chirpIDString)
-	if err != nil {
-		responseWithError(w, http.StatusBadRequest, "Invalid chirp ID", err)
-		return
-	}
-	chirp, err := cfg.db.GetChirp(r.Context(), chirpID)
-	if err != nil {
-		if strings.Contains(err.Error(), "no rows in result set") {
-			responseWithError(w, http.StatusNotFound, "chirp with "+chirpIDString+" not found", err)
-			return
-		} else {
-			responseWithError(w, http.StatusInternalServerError, "something went wrong", err)
-			return
-		}
-	}
-
-	responseWithJson(w, http.StatusOK, returnVals{
-		Chirps{
-			Id:        chirp.ID,
-			CreatedAt: chirp.CreatedAt,
-			UpdatedAt: chirp.UpdatedAt,
-			Body:      chirp.Body,
-			UserId:    chirp.UserID,
-		},
-	})
+	cleaned := theProfaner(body, badWords)
+	return cleaned, nil
 }
