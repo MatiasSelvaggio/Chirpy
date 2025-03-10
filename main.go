@@ -18,6 +18,7 @@ type apiConfig struct {
 	db             *database.Queries
 	platform       string
 	secretJWT      string
+	PolkaKey       string
 }
 
 func main() {
@@ -52,6 +53,8 @@ func main() {
 	// admin endpoints
 	serverMux.HandleFunc("GET /admin/metrics", cfg.handlerMetrics)
 	serverMux.HandleFunc("POST /admin/reset", cfg.handlerReset)
+	// webhook endpoints
+	serverMux.HandleFunc("POST /api/polka/webhooks", cfg.handlerPolkaWebhook)
 
 	server := &http.Server{
 		Addr:    portString,
@@ -83,10 +86,15 @@ func startApp() (string, string, string, apiConfig) {
 	if dbURL == "" {
 		log.Fatal("JWT_SECRET_KEY is not found in the environment")
 	}
+	polkaKey := os.Getenv("POLKA_KEY")
+	if dbURL == "" {
+		log.Fatal("JWT_SECRET_KEY is not found in the environment")
+	}
 	return portString, filePathRootString, dbURL, apiConfig{
 		fileserverHits: atomic.Int32{},
 		platform:       platform,
 		secretJWT:      secretJWT,
+		PolkaKey:       polkaKey,
 	}
 }
 

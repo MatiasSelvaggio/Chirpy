@@ -25,7 +25,7 @@ func handlerValidateChirps(w http.ResponseWriter, r *http.Request) {
 		Body   string    `json:"body"`
 		UserId uuid.UUID `json:"user_id"`
 	}
-	type returnVals struct {
+	type response struct {
 		CleanedBody string `json:"cleaned_body"`
 	}
 
@@ -50,7 +50,7 @@ func handlerValidateChirps(w http.ResponseWriter, r *http.Request) {
 	}
 	cleaned := theProfaner(params.Body, badWords)
 
-	responseWithJson(w, 200, returnVals{
+	responseWithJson(w, 200, response{
 		CleanedBody: cleaned,
 	})
 }

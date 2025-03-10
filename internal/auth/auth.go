@@ -98,3 +98,14 @@ func MakeRefreshToken() (string, error) {
 
 	return hex.EncodeToString(key), nil
 }
+
+func GetApiKey(headers http.Header) (string, error) {
+	authorization := headers.Get("Authorization")
+	if authorization == "" {
+		return "", errors.New("not Authorization send")
+	}
+	if !strings.Contains(authorization, "ApiKey") {
+		return "", errors.New("you must send a Bearer Token in Authorization header")
+	}
+	return strings.TrimPrefix(authorization, "ApiKey "), nil
+}
