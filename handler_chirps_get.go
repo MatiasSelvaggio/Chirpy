@@ -2,16 +2,33 @@ package main
 
 import (
 	"net/http"
+	"sort"
 	"strings"
 
+	"github.com/MatiasSelvaggio/Chirpy/internal/database"
 	"github.com/google/uuid"
 )
 
 func (cfg *apiConfig) handlerChirpsRetrieve(w http.ResponseWriter, r *http.Request) {
-	chirps, err := cfg.db.GetChirps(r.Context())
-	if err != nil {
-		responseWithError(w, http.StatusInternalServerError, "something went wrong", err)
-		return
+	s := r.URL.Query().Get("author_id")
+	var chirps []database.Chirp
+	var err error
+	if s == "" {
+		chirps, err = cfg.db.GetChirps(r.Context())
+		if err != nil {
+			responseWithError(w, http.StatusInternalServerError, "something went wrong", err)
+			return
+		}
+	} else {
+		userID, err := uuid.Parse(s)
+		if err != nil {
+			responseWithError(w, http.StatusBadRequest, "invalid uuid from author_id", err)
+		}
+		chirps, err = cfg.db.GetChirpsFromUser(r.Context(), userID)
+		if err != nil {
+			responseWithError(w, http.StatusInternalServerError, "something went wrong", err)
+			return
+		}
 	}
 	out := []Chirps{}
 	for _, chirp := range chirps {
@@ -21,6 +38,12 @@ func (cfg *apiConfig) handlerChirpsRetrieve(w http.ResponseWriter, r *http.Reque
 			UpdatedAt: chirp.UpdatedAt,
 			Body:      chirp.Body,
 			UserId:    chirp.UserID,
+		})
+	}
+	sortDirection := r.URL.Query().Get("sort")
+	if sortDirection == "desc" {
+		sort.Slice(out, func(i, j int) bool {
+			return out[i].CreatedAt.After(out[j].CreatedAt)
 		})
 	}
 
