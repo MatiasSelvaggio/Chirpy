@@ -35,13 +35,17 @@ func main() {
 	serverMux.Handle("/app/", cfg.middlewareMetricsInc(http.StripPrefix("/app/", http.FileServer(http.Dir(filePathRootString)))))
 
 	serverMux.HandleFunc("GET /api/healthz", handlerHealthz)
+	// users endpoints
+	serverMux.HandleFunc("POST /api/users", cfg.handlerUsersCreate)
+	serverMux.HandleFunc("POST /api/login", cfg.handlerUsersLogin)
+	// chirps endpoints
+	serverMux.HandleFunc("POST /api/validate_chirp", handlerValidateChirps)
+	serverMux.HandleFunc("POST /api/chirps", cfg.handlerChirpsCreate)
+	serverMux.HandleFunc("GET /api/chirps", cfg.handlerChirpsRetrieve)
+	serverMux.HandleFunc("GET /api/chirps/{chirpID}", cfg.handlerChirpsGet)
+	// admin endpoints
 	serverMux.HandleFunc("GET /admin/metrics", cfg.handlerMetrics)
 	serverMux.HandleFunc("POST /admin/reset", cfg.handlerReset)
-
-	serverMux.HandleFunc("POST /api/validate_chirp", handlerValidateChirps)
-	serverMux.HandleFunc("POST /api/chirps", cfg.handlerCreateChirps)
-
-	serverMux.HandleFunc("POST /api/users", cfg.handleCreationUser)
 
 	server := &http.Server{
 		Addr:    portString,
